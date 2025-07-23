@@ -5,6 +5,13 @@ document.addEventListener("DOMContentLoaded", () => {
     return;
   }
 
+  // Set today's date as default
+  const dateInput = document.getElementById("date");
+  if (dateInput) {
+    const today = new Date().toISOString().split('T')[0];
+    dateInput.value = today;
+  }
+
   transactionForm.addEventListener("submit", async function (e) {
     e.preventDefault();
 
@@ -14,7 +21,18 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error("The element #transaction-message was not found in your HTML.");
       return;
     }
+    
+    // Function to show message
+    const showMessage = (text, isError = false) => {
+      messageEl.textContent = text;
+      messageEl.style.display = "block";
+      messageEl.style.color = isError ? "red" : "green";
+      messageEl.style.backgroundColor = isError ? "#ffebee" : "#e8f5e8";
+      messageEl.style.border = isError ? "1px solid #f44336" : "1px solid #4caf50";
+    };
+
     // Clear previous messages
+    messageEl.style.display = "none";
     messageEl.textContent = "";
 
     // --- Form Data & Validation ---
@@ -24,26 +42,22 @@ document.addEventListener("DOMContentLoaded", () => {
     const date = document.getElementById("date").value;
 
     if (!selectedType) {
-      messageEl.textContent = "Please select a transaction type (Income or Expense).";
-      messageEl.style.color = "red";
+      showMessage("Please select a transaction type (Income or Expense).", true);
       return;
     }
 
     if (!amount || parseFloat(amount) <= 0) {
-      messageEl.textContent = "Please enter a valid positive amount.";
-      messageEl.style.color = "red";
+      showMessage("Please enter a valid positive amount.", true);
       return;
     }
 
     if (!category.trim()) {
-      messageEl.textContent = "Please select a category.";
-      messageEl.style.color = "red";
+      showMessage("Please select a category.", true);
       return;
     }
 
     if (!date) {
-      messageEl.textContent = "Please select a date.";
-      messageEl.style.color = "red";
+      showMessage("Please select a date.", true);
       return;
     }
 
@@ -56,6 +70,9 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     try {
+      // Show loading message
+      showMessage("Processing transaction...", false);
+      
       const response = await fetch("/transaction", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -63,17 +80,15 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       // --- Enhanced Debugging ---
-      // These logs will help us see exactly what the server is sending back.
-      // Please open your browser's Developer Tools (F12), go to the "Console" tab,
-      // and check the output after submitting the form.
-      console.log("--- Server Response ---");
+      console.log("--- Transaction Submission Debug Info ---");
+      console.log("Request data:", data);
       console.log("Status:", response.status, response.statusText);
       console.log("OK:", response.ok);
       console.log("Redirected:", response.redirected);
       console.log("URL:", response.url);
-      const responseText = await response.clone().text(); // Clone to read body without consuming it
+      const responseText = await response.clone().text();
       console.log("Body (raw text):", responseText);
-      console.log("-----------------------");
+      console.log("----------------------------------------");
 
       // If the server redirected (e.g., to a login page due to an expired session),
       // this indicates an authentication issue. Let's navigate to the new page.
@@ -88,19 +103,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (!response.ok) {
         const errorMessage = result?.message || `Error: ${response.statusText}`;
-        messageEl.textContent = errorMessage;
-        messageEl.style.color = "red";
+        showMessage(errorMessage, true);
         return;
       }
 
-      messageEl.textContent = result.message;
-      messageEl.style.color = "green";
-
+      showMessage(result.message || "Transaction added successfully!");
       transactionForm.reset();
-      setTimeout(() => (window.location.href = "/dashboard"), 1500);
+      
+      // Redirect to dashboard after a short delay
+      setTimeout(() => {
+        window.location.href = "/dashboard";
+      }, 1500);
+      
     } catch (err) {
-      messageEl.textContent = "An error occurred. Please check the console for details.";
-      messageEl.style.color = "red";
+      showMessage("An error occurred. Please check the console for details.", true);
       console.error(err);
     }
   });
