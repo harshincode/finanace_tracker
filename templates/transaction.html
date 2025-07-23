@@ -120,6 +120,9 @@ textarea {
 <div class="transaction-form-container">
   <h2 class="form-title">💸 Add <span>New</span> Transaction</h2>
 
+  <!-- Message display area -->
+  <div id="transaction-message" style="margin-bottom: 15px; padding: 10px; border-radius: 5px; display: none;"></div>
+
   <form id="transactionForm">
     <!-- Transaction Type -->
     <div class="form-group type-group">
@@ -141,11 +144,25 @@ textarea {
       <label for="category">Category</label>
       <select id="category" name="category" required>
         <option value="" disabled selected>Select a category</option>
-        <option value="salary">Salary</option>
-        <option value="food">Food</option>
-        <option value="transport">Transport</option>
-        <option value="shopping">Shopping</option>
-        <!-- Add more categories as needed -->
+        <!-- Income Categories -->
+        <optgroup label="Income">
+          <option value="salary">Salary</option>
+          <option value="freelance">Freelance</option>
+          <option value="investment">Investment</option>
+          <option value="bonus">Bonus</option>
+          <option value="other_income">Other Income</option>
+        </optgroup>
+        <!-- Expense Categories -->
+        <optgroup label="Expenses">
+          <option value="food">Food & Dining</option>
+          <option value="transport">Transportation</option>
+          <option value="shopping">Shopping</option>
+          <option value="bills">Bills & Utilities</option>
+          <option value="entertainment">Entertainment</option>
+          <option value="healthcare">Healthcare</option>
+          <option value="education">Education</option>
+          <option value="other_expense">Other Expense</option>
+        </optgroup>
       </select>
     </div>
 
@@ -164,7 +181,7 @@ textarea {
     <!-- Buttons -->
     <div class="form-buttons">
       <button type="submit" class="submit-btn">Add Transaction</button>
-      <button type="reset" class="cancel-btn">Cancel</button>
+      <button type="button" class="cancel-btn" onclick="window.location.href='/dashboard'">Back to Dashboard</button>
     </div>
   </form>
 </div>

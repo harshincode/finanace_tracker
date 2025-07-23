@@ -139,12 +139,21 @@ def handle_transaction():
             balance = total_income - total_expense
             cur.close()
 
-            return jsonify({"message": "Transaction added successfully!", "income": total_income, "expense": total_expense, "balance": balance})
+            return jsonify({
+                "message": "Transaction added successfully!", 
+                "income": total_income, 
+                "expense": total_expense, 
+                "balance": balance,
+                "success": True
+            }), 200
         except Exception as e:
             # Log the actual error to your terminal for debugging
             print(f"DATABASE ERROR: {e}")
             mysql.connection.rollback() # Important to rollback on failure
-            return jsonify({"message": "An error occurred while saving the transaction. Please check your data."}), 500
+            return jsonify({
+                "message": "An error occurred while saving the transaction. Please check your data.",
+                "success": False
+            }), 500
 
     # For GET requests
     return render_template('transaction.html')
