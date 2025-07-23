@@ -8,16 +8,44 @@ app = Flask(__name__)
 app.secret_key = "super_secret_key"  # Needed for session
 CORS(app)
 
-# Use SQLite for simplicity
+# Try to import MySQL, fallback to SQLite if not available
+try:
+    from flask_mysqldb import MySQL
+    from flask_mysqldb import MySQLdb
+    
+    app.config['MYSQL_HOST'] = 'localhost'
+    app.config['MYSQL_USER'] = 'root'
+    app.config['MYSQL_PASSWORD'] = 'hd@123'  # replace with your password
+    app.config['MYSQL_DB'] = 'finance_tracker'
+    app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
+    
+    mysql = MySQL(app)
+    
+    # Test MySQL connection
+    try:
+        with app.app_context():
+            test_cursor = mysql.connection.cursor()
+            test_cursor.execute("SELECT 1")
+            test_cursor.close()
+        USE_MYSQL = True
+        print("✅ Using MySQL database")
+    except:
+        USE_MYSQL = False
+        print("⚠️  MySQL not available, falling back to SQLite")
+except ImportError:
+    USE_MYSQL = False
+    print("⚠️  MySQL libraries not available, using SQLite")
+
+# SQLite setup
 DATABASE = 'finance_tracker.db'
 
 def get_db_connection():
     conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row  # This allows dict-like access to rows
+    conn.row_factory = sqlite3.Row
     return conn
 
-def init_database():
-    """Initialize the SQLite database with required tables"""
+def init_sqlite_database():
+    """Initialize SQLite database with required tables"""
     conn = get_db_connection()
     
     # Create users table
@@ -47,10 +75,44 @@ def init_database():
     
     conn.commit()
     conn.close()
-    print("✅ Database initialized successfully!")
+    print("✅ SQLite database initialized successfully!")
 
-# Initialize database when app starts
-init_database()
+# Initialize SQLite if MySQL is not available
+if not USE_MYSQL:
+    init_sqlite_database()
+
+# Database abstraction functions
+def execute_query(query, params=None, fetch=None):
+    """Execute database query with proper database backend"""
+    if USE_MYSQL:
+        cur = mysql.connection.cursor()
+        try:
+            cur.execute(query.replace('?', '%s'), params or ())
+            if fetch == 'one':
+                result = cur.fetchone()
+            elif fetch == 'all':
+                result = cur.fetchall()
+            else:
+                result = None
+            mysql.connection.commit()
+            return result
+        finally:
+            cur.close()
+    else:
+        conn = get_db_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute(query, params or ())
+            if fetch == 'one':
+                result = cur.fetchone()
+            elif fetch == 'all':
+                result = cur.fetchall()
+            else:
+                result = None
+            conn.commit()
+            return result
+        finally:
+            conn.close()
 
 @app.route("/")
 def home():
@@ -72,19 +134,14 @@ def register():
     hashed_password = generate_password_hash(password)
 
     try:
-        conn = get_db_connection()
-        
         # Check if user already exists
-        existing_user = conn.execute("SELECT email FROM users WHERE email = ?", (email,)).fetchone()
+        existing_user = execute_query("SELECT email FROM users WHERE email = ?", (email,), fetch='one')
         if existing_user:
             flash("An account with this email already exists.", "error")
-            conn.close()
             return redirect(url_for('signup_page'))
 
         # Insert new user
-        conn.execute("INSERT INTO users (email, password_hash) VALUES (?, ?)", (email, hashed_password))
-        conn.commit()
-        conn.close()
+        execute_query("INSERT INTO users (email, password_hash) VALUES (?, ?)", (email, hashed_password))
         flash("Account created successfully! Please log in.", "success")
         return redirect(url_for('home'))  # Redirect to login page on success
     except Exception as e:
@@ -98,9 +155,7 @@ def login():
     email = data.get("email")
     password = data.get("password")
 
-    conn = get_db_connection()
-    user = conn.execute("SELECT email, password_hash FROM users WHERE email = ?", (email,)).fetchone()
-    conn.close()
+    user = execute_query("SELECT email, password_hash FROM users WHERE email = ?", (email,), fetch='one')
 
     if user and check_password_hash(user['password_hash'], password):
         session["user"] = email  # Set user session
@@ -114,32 +169,30 @@ def dashboard():
         return redirect(url_for("home"))  # Protect route
 
     user_email = session["user"]
-    conn = get_db_connection()
 
     # Fetch summary data for the logged-in user
-    summary = conn.execute("""
+    summary = execute_query("""
         SELECT 
             SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as total_income, 
             SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as total_expense 
         FROM transactions 
         WHERE user_email = ?
-    """, (user_email,)).fetchone()
+    """, (user_email,), fetch='one')
     
-    total_income = summary['total_income'] or 0
-    total_expense = summary['total_expense'] or 0
+    total_income = summary['total_income'] or 0 if summary else 0
+    total_expense = summary['total_expense'] or 0 if summary else 0
     balance = total_income - total_expense
 
     # Fetch recent transactions for the logged-in user
-    transactions = conn.execute("""
+    transactions = execute_query("""
         SELECT id, type, amount, category, date, description 
         FROM transactions 
         WHERE user_email = ? 
         ORDER BY date DESC, id DESC 
         LIMIT 10
-    """, (user_email,)).fetchall()
+    """, (user_email,), fetch='all')
 
-    conn.close()
-    return render_template("dashboard.html", income=total_income, expense=total_expense, balance=balance, transactions=transactions)
+    return render_template("dashboard.html", income=total_income, expense=total_expense, balance=balance, transactions=transactions or [])
 
 @app.route("/logout")
 def logout():
@@ -191,46 +244,29 @@ def handle_transaction():
             # Convert amount to float
             amount = float(amount)
             
-            print(f"Opening database connection...")
-            conn = get_db_connection()
-            
-            # Test database connection by checking if table exists
-            table_check = conn.execute("""
-                SELECT name FROM sqlite_master 
-                WHERE type='table' AND name='transactions'
-            """).fetchone()
-            
-            if not table_check:
-                print("ERROR: transactions table does not exist")
-                conn.close()
-                return jsonify({"message": "Database table 'transactions' not found. Please create the database schema.", "success": False}), 500
-            
-            # Check table structure
-            columns = conn.execute("PRAGMA table_info(transactions)").fetchall()
-            print(f"Table structure: {[dict(col) for col in columns]}")
-            
             print(f"Inserting transaction...")
-            conn.execute("""
+            
+            # Insert transaction
+            execute_query("""
                 INSERT INTO transactions (user_email, type, amount, category, date, description) 
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (user_email, transaction_type, amount, category, date, description))
-            conn.commit()
+            
             print(f"Transaction inserted successfully")
 
-            # Fetch totals for the specific user
+            # Fetch updated totals for the specific user
             print(f"Fetching updated totals...")
-            summary = conn.execute("""
+            summary = execute_query("""
                 SELECT 
                     SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as total_income, 
                     SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as total_expense 
                 FROM transactions 
                 WHERE user_email = ?
-            """, (user_email,)).fetchone()
+            """, (user_email,), fetch='one')
             
-            total_income = summary['total_income'] or 0
-            total_expense = summary['total_expense'] or 0
+            total_income = summary['total_income'] or 0 if summary else 0
+            total_expense = summary['total_expense'] or 0 if summary else 0
             balance = total_income - total_expense
-            conn.close()
             
             print(f"Success! Income: {total_income}, Expense: {total_expense}, Balance: {balance}")
             print(f"=== END DEBUG INFO ===")
@@ -246,11 +282,6 @@ def handle_transaction():
         except Exception as e:
             print(f"DATABASE ERROR: {e}")
             print(f"Error type: {type(e)}")
-            try:
-                if 'conn' in locals():
-                    conn.close()
-            except:
-                pass
             return jsonify({
                 "message": f"An error occurred: {str(e)}",
                 "success": False
