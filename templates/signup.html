@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sign Up | MyFinanceTracker</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <div class="login-box">
+      <div class="logo bounce-in">📝 <span>Create Account</span></div>
+
+      {# This block will display messages from the backend #}
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <p class="message {{ category }}">{{ message }}</p>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <form action="{{ url_for('register') }}" method="post">
+        <input type="email" id="email" name="email" placeholder="Email" required class="input" />
+        <input type="password" id="password" name="password" placeholder="Password" required class="input" />
+        <button type="submit" class="btn">Sign Up</button>
+      </form>
+      <p class="signup-text">Already have an account? <a href="/">Login</a></p>
+    </div>
+  </div>
+</body>
+</html>
