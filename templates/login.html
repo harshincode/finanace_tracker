@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login - Finance Tracker</title>
+    <!-- Link to your local style.css file -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="logo">💰<span>Login</span></div>
+
+        <!-- This div will display error messages from the server -->
+        <div id="message" style="min-height: 24px;"></div>
+
+        <!-- Ensure your form and inputs have these `id` attributes -->
+        <form id="login-form">
+            <input type="email" id="email" name="email" placeholder="Email" required>
+            <input type="password" id="password" name="password" placeholder="Password" required>
+            <button type="submit" class="btn">Log In</button>
+        </form>
+        <p class="text-link">Don't have an account? <a href="/signup">Sign Up</a></p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const loginForm = document.getElementById('login-form');
+            const messageContainer = document.getElementById('message');
+
+            loginForm.addEventListener('submit', async (event) => {
+                // 1. Prevent the browser from reloading the page
+                event.preventDefault();
+
+                // 2. Get user input
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+
+                // 3. Send data to the server as JSON
+                try {
+                    const response = await fetch('/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json', // This header is essential
+                        },
+                        body: JSON.stringify({ email, password }),
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        // If login is successful, redirect to the dashboard
+                        window.location.href = '/dashboard';
+                    } else {
+                        // Otherwise, display the error message
+                        messageContainer.textContent = result.message;
+                    }
+                } catch (error) {
+                    messageContainer.textContent = 'A network error occurred. Please try again.';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
